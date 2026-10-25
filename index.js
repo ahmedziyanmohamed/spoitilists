@@ -10,7 +10,10 @@ var SCOPES = [
   "playlist-read-private",
   "playlist-read-collaborative",
   "user-library-read",
-  "user-read-email"
+  "user-read-email",
+  "user-read-playback-state",
+  "user-modify-playback-state",
+  "user-read-currently-playing"
 ].join(" ");
 
 var AUTH_URL = "https://accounts.spotify.com/authorize";
@@ -127,18 +130,69 @@ function ensureAccessToken() {
   return true;
 }
 
-function spotifyGet(path) {
+function spotifyRequest(path, method, payload, customHeaders) {
   if (!ensureAccessToken()) return { ok: false, status: 401, body: "{}" };
   var t = auth.getTokens();
   var url = path.indexOf("http") === 0 ? path : API_BASE + path;
-  var r = http.get(url, { Authorization: "Bearer " + t.access_token });
-  if (r.status === 401) {
-    if (ensureAccessToken()) {
-      t = auth.getTokens();
-      r = http.get(url, { Authorization: "Bearer " + t.access_token });
+  var headers = {
+    Authorization: "Bearer " + t.access_token
+  };
+  if (customHeaders) {
+    for (var key in customHeaders) {
+      if (customHeaders.hasOwnProperty(key)) {
+        headers[key] = customHeaders[key];
+      }
     }
   }
-  return r;
+
+  var requestBody = payload;
+  if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
+    requestBody = JSON.stringify(requestBody);
+  }
+
+  var r = null;
+  var methodName = String(method || "GET").toUpperCase();
+  if (methodName === "GET") {
+    r = http.get(url, headers);
+  } else if (methodName === "POST") {
+    r = http.post(url, requestBody || "", headers);
+  } else if (methodName === "PUT") {
+    r = http.put(url, requestBody || "", headers);
+  } else if (methodName === "DELETE") {
+    r = http.delete(url, requestBody || "", headers);
+  } else {
+    r = http.get(url, headers);
+  }
+
+  if (r && r.status === 401) {
+    if (ensureAccessToken()) {
+      t = auth.getTokens();
+      headers.Authorization = "Bearer " + t.access_token;
+      if (methodName === "GET") {
+        r = http.get(url, headers);
+      } else if (methodName === "POST") {
+        r = http.post(url, requestBody || "", headers);
+      } else if (methodName === "PUT") {
+        r = http.put(url, requestBody || "", headers);
+      } else if (methodName === "DELETE") {
+        r = http.delete(url, requestBody || "", headers);
+      }
+    }
+  }
+
+  return r || { ok: false, status: 0, body: "{}" };
+}
+
+function spotifyGet(path) {
+  return spotifyRequest(path, "GET", null, null);
+}
+
+function spotifyPut(path, payload) {
+  return spotifyRequest(path, "PUT", payload, null);
+}
+
+function spotifyPost(path, payload) {
+  return spotifyRequest(path, "POST", payload, null);
 }
 
 function canReadSpotifyLibrary() {
@@ -250,7 +304,7 @@ function customSearch(query) {
       album_name: al.name,
       album_type: al.album_type || "album",
       release_date: al.release_date || "",
-      cover_url: pickImage(albums[ai].images),
+      cover_url: pickImage(al.images),
       item_type: "album",
       provider_id: EXT_ID
     });
@@ -301,6 +355,120 @@ function fetchAllPaginated(initialPath) {
     next = data.next || null;
   }
   return all;
+}
+
+function getPlaybackState() {
+  var r = spotifyGet("/me/player");
+  if (!r.ok) {
+    var body = {};
+    try {
+      body = JSON.parse(r.body || "{}");
+    } catch (e) {}
+    return {
+      success: false,
+      error:
+        (body && body.error && body.error.message) ||
+        "Spotify playback is unavailable. Sign in and open Spotify on a device.",
+      device_id: "",
+      is_playing: false
+    };
+  }
+
+  try {
+    var data = JSON.parse(r.body || "{}");
+    var deviceId = data && data.device ? data.device.id : "";
+    var item = data && data.item ? data.item : null;
+    return {
+      success: true,
+      is_playing: !!(data && data.is_playing),
+      device_id: deviceId,
+      title: item && item.name ? item.name : "",
+      artist: item && item.artists && item.artists.length ? item.artists[0].name : "",
+      album: item && item.album && item.album.name ? item.album.name : "",
+      image: item && item.album && item.album.images && item.album.images.length ? item.album.images[0].url : "",
+      raw: data
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error: "Spotify playback state could not be parsed.",
+      device_id: "",
+      is_playing: false
+    };
+  }
+}
+
+function toggleSpotifyPlayback() {
+  var state = getPlaybackState();
+  if (!state.success) {
+    return { success: false, error: state.error || "Playback is unavailable." };
+  }
+
+  var endpoint = state.is_playing ? "/me/player/pause" : "/me/player/play";
+  var payload = state.device_id ? { device_id: state.device_id } : {};
+  var r = spotifyPut(endpoint, payload);
+
+  if (!r.ok) {
+    var msg = "Playback action failed";
+    try {
+      var data = JSON.parse(r.body || "{}");
+      if (data && data.error && data.error.message) msg = data.error.message;
+    } catch (e) {}
+    return { success: false, error: msg };
+  }
+
+  return {
+    success: true,
+    message: state.is_playing ? "Spotify playback paused." : "Spotify playback started."
+  };
+}
+
+function skipSpotifyTrack() {
+  var r = spotifyPost("/me/player/next", {});
+  if (!r.ok) {
+    var msg = "Skip failed";
+    try {
+      var data = JSON.parse(r.body || "{}");
+      if (data && data.error && data.error.message) msg = data.error.message;
+    } catch (e) {}
+    return { success: false, error: msg };
+  }
+  return { success: true, message: "Skipped to the next track." };
+}
+
+function previousSpotifyTrack() {
+  var r = spotifyPost("/me/player/previous", {});
+  if (!r.ok) {
+    var msg = "Previous-track action failed";
+    try {
+      var data = JSON.parse(r.body || "{}");
+      if (data && data.error && data.error.message) msg = data.error.message;
+    } catch (e) {}
+    return { success: false, error: msg };
+  }
+  return { success: true, message: "Went back to the previous track." };
+}
+
+function playSpotifyTrack(trackUri) {
+  var uri = String(trackUri || "").trim();
+  if (!uri) return { success: false, error: "No track URI provided." };
+
+  var state = getPlaybackState();
+  var payload = { uris: [uri] };
+  if (state.success && state.device_id) {
+    payload.device_id = state.device_id;
+  }
+
+  var r = spotifyPut("/me/player/play", payload);
+  if (!r.ok) {
+    var msg = "Unable to start track";
+    try {
+      var data = JSON.parse(r.body || "{}");
+      if (data && data.error && data.error.message) msg = data.error.message;
+    } catch (e) {}
+    return { success: false, error: msg };
+  }
+  return { success: true, message: "Spotify playback started." };
 }
 
 function getAlbum(albumId) {
@@ -645,7 +813,6 @@ function completeSpotifyLogin() {
   if (!clientId) {
     return { success: false, error: "Set Spotify Client ID first." };
   }
-  // Prefer automatic callback code/token exchange first.
   tryExchangePendingCode();
   var tok = auth.getTokens();
   if (tok && tok.access_token && !tok.is_expired) {
@@ -722,5 +889,10 @@ registerExtension({
   connectSpotify: connectSpotify,
   showLastSpotifyAuthLink: showLastSpotifyAuthLink,
   completeSpotifyLogin: completeSpotifyLogin,
-  disconnectSpotify: disconnectSpotify
+  disconnectSpotify: disconnectSpotify,
+  getPlaybackState: getPlaybackState,
+  toggleSpotifyPlayback: toggleSpotifyPlayback,
+  skipSpotifyTrack: skipSpotifyTrack,
+  previousSpotifyTrack: previousSpotifyTrack,
+  playSpotifyTrack: playSpotifyTrack
 });
