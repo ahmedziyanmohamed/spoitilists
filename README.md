@@ -1,116 +1,79 @@
-If this helped you, consider starring the repo ⭐
-⭐This is still on the making, SpotiFLAC still has an oauth issue.⭐
-# SpoitiLists — an addon for SpotiFLAC
+# SpoitiLists — Spotify playlists and liked songs in SpotiFLAC
 
-**SpoitiLists** is a free extension for **[SpotiFLAC Mobile](https://github.com/zarzet/SpotiFLAC-Mobile)**. It shows **your real Spotify playlists** and **your saved (liked) songs** inside SpotiFLAC’s **Home** feed. When you **open a playlist** in the app, it loads the **current track list** from Spotify, so new songs you add on Spotify show up the next time you open that playlist (SpotiFLAC may cache the Home screen for a few minutes).
+SpoitiLists is a free extension for SpotiFLAC Mobile that shows your Spotify playlists and saved tracks in the app.
 
-This project is **not** made by Spotify or the SpotiFLAC team. It uses Spotify’s official **Web API** and **OAuth** (you log in with your Spotify account).
+This repo now supports the modern Spotify Web API flow and playback controls using your own Spotify Client ID entered in the extension settings at runtime.
 
----
+Important:
+- No Spotify key is required in the app build or extension package.
+- Enter your own Client ID in SpotiFLAC settings when connecting.
+- Playback support uses Spotify Web API endpoints and requires an active Spotify device.
 
-## Install SpoitiLists in SpotiFLAC (easiest: Store link)
+## Features
+- Home feed with your Spotify playlists
+- Saved tracks / liked songs
+- Playlist, album, artist, and track lookup
+- Spotify OAuth PKCE login
+- Playback state + play/pause/skip controls
+- Runtime Client ID configuration (not baked into the build)
 
-SpotiFLAC can load extensions from a **registry JSON** on GitHub.
+## Install
 
-1. Open **SpotiFLAC** → **Store** tab.
-2. When it asks for an **Extension Repository URL**, paste this **raw** `registry.json` link:
+Open SpotiFLAC → Store → Extension Repository URL and paste:
 
-   `https://raw.githubusercontent.com/AlexRabbit/SpoitiLists/refs/heads/main/registry.json`
+https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/registry.json
 
+Then install SpotiLists from the list.
 
-3. Find **SpoitiLists** in the list and **install** it.
-4. Go to **Settings → Extensions**, tap **SpoitiLists**, and follow **Part B** below to connect Spotify.
+## Spotify setup
 
----
+1. Go to https://developer.spotify.com/dashboard
+2. Create an app
+3. Add redirect URI:
+   spotiflac://callback
+4. Copy the Client ID
+5. In SpotiFLAC → Settings → Extensions → SpoitiLists, paste the Client ID
+6. Tap Connect to Spotify
 
-## Part A — Spotify Developer setup (first time only)
+No Client Secret is needed for this extension. The app uses PKCE and your runtime Client ID only.
 
-You must create a small “app” in Spotify’s developer site. You are **not** publishing an app to the Play Store; this is only for an **API Client ID**.
+## Playback support
 
-1. On a computer or phone browser, go to:  
-   [https://developer.spotify.com/dashboard](https://developer.spotify.com/dashboard)
-2. Log in with your **Spotify** account.
-3. Click **Create app**.
-4. Fill in:
-   - **App name:** anything, e.g. `SpoitiLists`
-   - **App description:** e.g. `Personal SpotiFLAC extension`
-   - **Redirect URI:** click **Add**, type exactly:  
-     `spotiflac://callback`  
-     (If SpotiFLAC’s docs or settings say a different URI, use **that** exact string instead.)
-   - **Which API/SDKs are you planning to use?** choose **Web API**.
-5. Save. Open the app → **Settings**.
-6. Copy the **Client ID** (long text). **Do not** put your **Client Secret** into SpoitiLists; this extension uses **PKCE** and does not need the secret.
+The extension includes Web API playback helpers for:
+- current playback state
+- play / pause toggle
+- next track
+- previous track
+- start a specific track
 
----
+These actions require:
+- valid Spotify OAuth
+- user-read-playback-state scope
+- user-modify-playback-state scope
+- an active Spotify device playing in the background or on another device
 
-## Part B — Connect SpoitiLists inside SpotiFLAC
-
-**Why buttons used to “do nothing”:** SpotiFLAC wrapped extension actions as `{ result: { message: … } }`, while the UI read `message` only at the **top** level — so toasts never appeared. **SpoitiLists 1.1.1+** expects a SpotiFLAC build that **flattens** that JSON (see **Part C**), and (for the copyable field) merges **`setting_updates`** into extension settings.
-
-**Version / Store installs:** SpotiFLAC refuses an install when the package **version equals** the one already installed (`Extension is already at version …`).
-
-**Store shows new version but Settings shows an old one:** The Store reads **`registry.json`**; the installed version comes from **`manifest.json` inside the `.spotiflac-ext` file**. If you bump `manifest.json` / `registry.json` but **forget to rebuild and commit** `extensions/spoiti-lists.spotiflac-ext` and `extensions/SpotiLists.spotiflac-ext`, GitHub still serves an **old zip** — users keep getting the old version. After every version bump, run **`scripts/package.sh`** or **`scripts/package.ps1`**, then **commit and push both extension files** together with the JSON files. CI on this repo checks that they match.
-
-**Store shows “Failed to install SpoitiLists”:** SpotiFLAC downloads the file from **`download_url`** in `registry.json` (see `extension_store.go` → `downloadExtension`). If that URL returns **404** (file missing on GitHub, wrong branch, or **wrong capitalization** in the path), the install fails with a generic message. **Fix:** commit and push **`extensions/spoiti-lists.spotiflac-ext`** (and/or `extensions/SpotiLists.spotiflac-ext`) to the **`main`** branch, then open the raw URL in a browser — you must see a **download**, not “404: Not Found”. The registry uses the all-lowercase filename to avoid case mismatches. After pushing, pull to refresh in the app Store (or clear the store cache in SpotiFLAC if it still fails).
-
-1. Open **SpotiFLAC** → **Settings** → **Extensions** → **SpoitiLists** (install **1.1.1+**).
-2. Paste your **Spotify Client ID** into **Spotify Client ID**.
-3. Leave **Redirect URI** as `spotiflac://callback` unless you changed it in Spotify’s dashboard (both places must **match exactly**).
-4. Tap **1. Connect to Spotify**. The **Spotify login link** field fills with a long URL — **select and copy** it (or use the snackbar hint), open it in **Chrome / Safari**, log in, and tap **Agree**.
-5. After approval, Spotify redirects (often `spotiflac://callback?code=…`). If the browser cannot open the app, **copy the `code`** (or the whole callback URL), paste it into **Authorization code**, **save** that field, then tap **2. Finish login**.
-6. If the link field is empty, tap **Show last login link again** (avoid tapping **Connect** again unless you want a **new** PKCE attempt).
-
-**Optional — automatic handoff:** If your SpotiFLAC build handles **`spotiflac://callback`**, you may not need to paste a code. That is implemented in the **app**, not only in SpoitiLists.
-
-**Privacy:** Clear **Authorization code** after login if you pasted a code there.
-
----
-
-## Part C — SpotiFLAC build expected for 1.1.x
-
-For **Connect** to show feedback and fill **Spotify login link**, use a SpotiFLAC Mobile build that includes:
-
-- **Go:** `InvokeAction` flattens the extension’s return object to the top level of the JSON (so `message` / `setting_updates` are visible to Flutter).
-- **Flutter:** extension settings screen merges **`setting_updates`** from action results into saved settings, and shows **`oauth_login_url`** as selectable text.
-
-The copy in this repo’s **`SpotiFLAC-Mobile-main`** folder includes those changes; if you use an older store APK, upgrade when the upstream project ships the same fixes, or build from source.
-
----
-
-## Where to see your playlists in SpotiFLAC
-
-- Open the **Home** tab. With SpoitiLists enabled, you should see sections like **Your playlists** and **Saved tracks**.
-- Tap a **playlist** to open it; the song list is loaded from Spotify when you open it.
-- If you added songs on Spotify and don’t see them yet: **go back** and **open the playlist again**. The Home row can update after a **short cache** (often a few minutes).
-
----
-
-## Optional: install the file without the Store
-
-1. Download **`extensions/spoiti-lists.spotiflac-ext`** from this repo (raw or ZIP). **`extensions/SpotiLists.spotiflac-ext`** is the same bytes if you prefer that name for sideloading.
-2. SpotiFLAC → **Settings** → **Extensions** → install **.spotiflac-ext** (as described in SpotiFLAC’s own help).
-
----
-
-## For developers: rebuild the extension package
+## Build the extension package
 
 From the repo root:
 
-- **Windows:**  
-  `powershell -ExecutionPolicy Bypass -File scripts/package.ps1`
-- **macOS / Linux:**  
-  `chmod +x scripts/package.sh && ./scripts/package.sh`
+- macOS / Linux:
+  chmod +x scripts/package.sh && ./scripts/package.sh
 
-This creates **`SpotiLists.spotiflac-ext`** at the repo root and copies it to **`extensions/spoiti-lists.spotiflac-ext`** (Store `download_url` — **commit and push this file** so the Store can install) and **`extensions/SpotiLists.spotiflac-ext`** (same package, friendly name).
+- Windows PowerShell:
+  powershell -ExecutionPolicy Bypass -File scripts/package.ps1
 
-After changing `manifest.json` or `index.js`, rebuild, commit, and push so the Store URL stays up to date.
+This creates the packaged extension file and copies it into the extensions folder.
 
----
+## Repo notes
 
-## Docs and credits
+- manifest.json contains the extension metadata and settings
+- index.js contains the Spotify API integration and playback handlers
+- registry.json is used by SpotiFLAC Store installs
 
-- [SpotiFLAC Extension Development Guide](https://spotiflac.zarz.moe/docs)
-- [SpotiFLAC Mobile](https://github.com/zarzet/SpotiFLAC-Mobile)
-- [Spotify Web API](https://developer.spotify.com/documentation/web-api)
+## Credits
 
-License: **MIT** — see `LICENSE`.
+- SpotiFLAC Mobile
+- Spotify Web API
+- PKCE OAuth flow
+
+License: MIT
