@@ -1,8 +1,8 @@
 {
   "name": "spoiti-lists",
   "displayName": "SpotiLists",
-  "version": "1.4.0",
-  "description": "Your Spotify playlists and liked songs inside SpotiFLAC. Uses Spotify’s official API; lists refresh when you open them (home feed may cache a few minutes).",
+  "version": "1.4.1",
+  "description": "Your Spotify playlists and liked songs inside SpotiFLAC. Uses Spotify’s official API; lists refresh when you open them (home feed may cache a few minutes). No app build-time key is required.",
   "author": "AlexRabbit",
   "homepage": "https://github.com/AlexRabbit/SpoitiLists",
   "minAppVersion": "4.1.0",
@@ -45,8 +45,9 @@
       "key": "client_id",
       "label": "Spotify Client ID",
       "type": "string",
-      "description": "From Spotify Developer Dashboard (Desktop app). Never put your Client Secret here.",
-      "required": true
+      "description": "From Spotify Developer Dashboard. This is entered at runtime in SpotiFLAC, not baked into the extension build.",
+      "required": false,
+      "default": ""
     },
     {
       "key": "redirect_uri",
@@ -89,6 +90,34 @@
       "type": "button",
       "description": "Fallback only. Usually not needed if callback opens SpotiFLAC.",
       "action": "completeSpotifyLogin"
+    },
+    {
+      "key": "playback_state",
+      "label": "Get playback state",
+      "type": "button",
+      "description": "Fetch the current Spotify playback state and active device.",
+      "action": "getPlaybackState"
+    },
+    {
+      "key": "toggle_playback",
+      "label": "Play/Pause",
+      "type": "button",
+      "description": "Toggle playback on the current active Spotify device.",
+      "action": "toggleSpotifyPlayback"
+    },
+    {
+      "key": "next_track",
+      "label": "Next track",
+      "type": "button",
+      "description": "Skip ahead to the next track on Spotify.",
+      "action": "skipSpotifyTrack"
+    },
+    {
+      "key": "previous_track",
+      "label": "Previous track",
+      "type": "button",
+      "description": "Go back to the previous track on Spotify.",
+      "action": "previousSpotifyTrack"
     },
     {
       "key": "logout",
