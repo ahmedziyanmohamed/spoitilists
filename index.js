@@ -10,10 +10,7 @@ var SCOPES = [
   "playlist-read-private",
   "playlist-read-collaborative",
   "user-library-read",
-  "user-read-email",
-  "user-read-playback-state",
-  "user-modify-playback-state",
-  "user-read-currently-playing"
+  "user-read-email"
 ].join(" ");
 
 var AUTH_URL = "https://accounts.spotify.com/authorize";
@@ -35,10 +32,9 @@ function getClientId() {
 function getRedirectUri() {
   var u = settings.redirect_uri;
   if (u && String(u).trim()) return String(u).trim();
-  return "spotiflac://callback";
+  return "mornye://callback";
 }
 
-/** Pull ?code= from a pasted callback URL or return trimmed raw code. */
 function extractAuthCode(input) {
   try {
     var s = String(input).trim();
@@ -185,14 +181,6 @@ function spotifyRequest(path, method, payload, customHeaders) {
 
 function spotifyGet(path) {
   return spotifyRequest(path, "GET", null, null);
-}
-
-function spotifyPut(path, payload) {
-  return spotifyRequest(path, "PUT", payload, null);
-}
-
-function spotifyPost(path, payload) {
-  return spotifyRequest(path, "POST", payload, null);
 }
 
 function canReadSpotifyLibrary() {
@@ -355,120 +343,6 @@ function fetchAllPaginated(initialPath) {
     next = data.next || null;
   }
   return all;
-}
-
-function getPlaybackState() {
-  var r = spotifyGet("/me/player");
-  if (!r.ok) {
-    var body = {};
-    try {
-      body = JSON.parse(r.body || "{}");
-    } catch (e) {}
-    return {
-      success: false,
-      error:
-        (body && body.error && body.error.message) ||
-        "Spotify playback is unavailable. Sign in and open Spotify on a device.",
-      device_id: "",
-      is_playing: false
-    };
-  }
-
-  try {
-    var data = JSON.parse(r.body || "{}");
-    var deviceId = data && data.device ? data.device.id : "";
-    var item = data && data.item ? data.item : null;
-    return {
-      success: true,
-      is_playing: !!(data && data.is_playing),
-      device_id: deviceId,
-      title: item && item.name ? item.name : "",
-      artist: item && item.artists && item.artists.length ? item.artists[0].name : "",
-      album: item && item.album && item.album.name ? item.album.name : "",
-      image: item && item.album && item.album.images && item.album.images.length ? item.album.images[0].url : "",
-      raw: data
-    };
-  } catch (e) {
-    return {
-      success: false,
-      error: "Spotify playback state could not be parsed.",
-      device_id: "",
-      is_playing: false
-    };
-  }
-}
-
-function toggleSpotifyPlayback() {
-  var state = getPlaybackState();
-  if (!state.success) {
-    return { success: false, error: state.error || "Playback is unavailable." };
-  }
-
-  var endpoint = state.is_playing ? "/me/player/pause" : "/me/player/play";
-  var payload = state.device_id ? { device_id: state.device_id } : {};
-  var r = spotifyPut(endpoint, payload);
-
-  if (!r.ok) {
-    var msg = "Playback action failed";
-    try {
-      var data = JSON.parse(r.body || "{}");
-      if (data && data.error && data.error.message) msg = data.error.message;
-    } catch (e) {}
-    return { success: false, error: msg };
-  }
-
-  return {
-    success: true,
-    message: state.is_playing ? "Spotify playback paused." : "Spotify playback started."
-  };
-}
-
-function skipSpotifyTrack() {
-  var r = spotifyPost("/me/player/next", {});
-  if (!r.ok) {
-    var msg = "Skip failed";
-    try {
-      var data = JSON.parse(r.body || "{}");
-      if (data && data.error && data.error.message) msg = data.error.message;
-    } catch (e) {}
-    return { success: false, error: msg };
-  }
-  return { success: true, message: "Skipped to the next track." };
-}
-
-function previousSpotifyTrack() {
-  var r = spotifyPost("/me/player/previous", {});
-  if (!r.ok) {
-    var msg = "Previous-track action failed";
-    try {
-      var data = JSON.parse(r.body || "{}");
-      if (data && data.error && data.error.message) msg = data.error.message;
-    } catch (e) {}
-    return { success: false, error: msg };
-  }
-  return { success: true, message: "Went back to the previous track." };
-}
-
-function playSpotifyTrack(trackUri) {
-  var uri = String(trackUri || "").trim();
-  if (!uri) return { success: false, error: "No track URI provided." };
-
-  var state = getPlaybackState();
-  var payload = { uris: [uri] };
-  if (state.success && state.device_id) {
-    payload.device_id = state.device_id;
-  }
-
-  var r = spotifyPut("/me/player/play", payload);
-  if (!r.ok) {
-    var msg = "Unable to start track";
-    try {
-      var data = JSON.parse(r.body || "{}");
-      if (data && data.error && data.error.message) msg = data.error.message;
-    } catch (e) {}
-    return { success: false, error: msg };
-  }
-  return { success: true, message: "Spotify playback started." };
 }
 
 function getAlbum(albumId) {
@@ -782,7 +656,7 @@ function connectSpotify() {
     message:
       "Opening Spotify login. Redirect URI: " +
       redir +
-      ". Approve in browser and return to SpotiFLAC.",
+      ". Approve in browser and return to Mornye.",
     open_auth_url: pk.authUrl,
     setting_updates: {
       redirect_uri: redir,
@@ -889,10 +763,5 @@ registerExtension({
   connectSpotify: connectSpotify,
   showLastSpotifyAuthLink: showLastSpotifyAuthLink,
   completeSpotifyLogin: completeSpotifyLogin,
-  disconnectSpotify: disconnectSpotify,
-  getPlaybackState: getPlaybackState,
-  toggleSpotifyPlayback: toggleSpotifyPlayback,
-  skipSpotifyTrack: skipSpotifyTrack,
-  previousSpotifyTrack: previousSpotifyTrack,
-  playSpotifyTrack: playSpotifyTrack
+  disconnectSpotify: disconnectSpotify
 });
