@@ -1,6 +1,6 @@
 /**
- * SpoitiLists — SpotiFLAC extension (Spotify Web API + PKCE).
- * https://github.com/AlexRabbit/SpoitiLists · https://spotiflac.zarz.moe/docs
+ * SpoitiLists — Spotify metadata extension for Mornye.
+ * Uses Spotify’s official Web API + PKCE.
  */
 
 var EXT_ID = "spoiti-lists";

@@ -1,25 +1,24 @@
-# SpoitiLists — Spotify playlists and liked songs in SpotiFLAC
+# SpoitiLists — Spotify playlists and liked songs in Mornye
 
-SpoitiLists is a free extension for SpotiFLAC Mobile that shows your Spotify playlists and saved tracks in the app.
+SpoitiLists is a free extension for Mornye that shows your Spotify playlists and saved tracks in the app.
 
-This repo now supports the modern Spotify Web API flow and playback controls using your own Spotify Client ID entered in the extension settings at runtime.
+This repo uses the modern Spotify Web API flow and runtime Client ID setup. Your Client ID is entered in the extension settings at runtime.
 
 Important:
 - No Spotify key is required in the app build or extension package.
-- Enter your own Client ID in SpotiFLAC settings when connecting.
-- Playback support uses Spotify Web API endpoints and requires an active Spotify device.
+- Enter your own Client ID in Mornye settings when connecting.
+- The OAuth redirect URI is set to mornye://callback by default.
 
 ## Features
 - Home feed with your Spotify playlists
 - Saved tracks / liked songs
 - Playlist, album, artist, and track lookup
 - Spotify OAuth PKCE login
-- Playback state + play/pause/skip controls
 - Runtime Client ID configuration (not baked into the build)
 
 ## Install
 
-Open SpotiFLAC → Store → Extension Repository URL and paste:
+Open Mornye → Store → Extension Repository URL and paste:
 
 https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/registry.json
 
@@ -30,27 +29,12 @@ Then install SpotiLists from the list.
 1. Go to https://developer.spotify.com/dashboard
 2. Create an app
 3. Add redirect URI:
-   spotiflac://callback
+   mornye://callback
 4. Copy the Client ID
-5. In SpotiFLAC → Settings → Extensions → SpoitiLists, paste the Client ID
+5. In Mornye → Settings → Extensions → SpoitiLists, paste the Client ID
 6. Tap Connect to Spotify
 
 No Client Secret is needed for this extension. The app uses PKCE and your runtime Client ID only.
-
-## Playback support
-
-The extension includes Web API playback helpers for:
-- current playback state
-- play / pause toggle
-- next track
-- previous track
-- start a specific track
-
-These actions require:
-- valid Spotify OAuth
-- user-read-playback-state scope
-- user-modify-playback-state scope
-- an active Spotify device playing in the background or on another device
 
 ## Build the extension package
 
@@ -67,12 +51,12 @@ This creates the packaged extension file and copies it into the extensions folde
 ## Repo notes
 
 - manifest.json contains the extension metadata and settings
-- index.js contains the Spotify API integration and playback handlers
-- registry.json is used by SpotiFLAC Store installs
+- index.js contains the Spotify API integration and handlers
+- registry.json is used by Mornye Store installs
 
 ## Credits
 
-- SpotiFLAC Mobile
+- Mornye
 - Spotify Web API
 - PKCE OAuth flow
 
