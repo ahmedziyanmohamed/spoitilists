@@ -1,63 +1,75 @@
-# SpoitiLists — Spotify playlists and liked songs in Mornye
+# SpoitiLists — Mornye-compatible extension
 
-SpoitiLists is a free extension for Mornye that shows your Spotify playlists and saved tracks in the app.
+This repo is the Mornye-compatible version of the Spotify library extension.
 
-This repo uses the modern Spotify Web API flow and runtime Client ID setup. Your Client ID is entered in the extension settings at runtime.
+## New store format
 
-Important:
-- No Spotify key is required in the app build or extension package.
-- Enter your own Client ID in Mornye settings when connecting.
-- The OAuth redirect URI is set to mornye://callback by default.
+The Mornye extension store expects a registry-style layout similar to this:
 
-## Features
-- Home feed with your Spotify playlists
-- Saved tracks / liked songs
-- Playlist, album, artist, and track lookup
-- Spotify OAuth PKCE login
-- Runtime Client ID configuration (not baked into the build)
+- `registry.json` contains the published extension list
+- each entry includes metadata like `id`, `name`, `display_name`, `version`, `description`, `download_url`, `category`, and `tags`
+- packaged extensions are placed under `extensions/`
+- source and tests are kept under `sources/` and `tests/` for maintainable provider work
 
-## Install
+This project is intentionally simple at the moment, but it follows the same structure so it can be extended later without a full rewrite.
 
-Open Mornye → Store → Extension Repository URL and paste:
+## Current package layout
 
-https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/registry.json
+- `manifest.json` — runtime extension metadata used by the app
+- `index.js` — Spotify API integration and library/home feed logic
+- `registry.json` — Mornye store metadata entry
+- `scripts/package.sh` and `scripts/package.ps1` — build the packaged extension bundle
+- `extensions/` — generated extension archive(s)
 
-Then install SpotiLists from the list.
+## Recommended long-term layout
 
-## Spotify setup
+A future-proof package tree should look like:
 
-1. Go to https://developer.spotify.com/dashboard
-2. Create an app
-3. Add redirect URI:
-   mornye://callback
-4. Copy the Client ID
-5. In Mornye → Settings → Extensions → SpoitiLists, paste the Client ID
-6. Tap Connect to Spotify
+```
+repo/
+  README.md
+  registry.json
+  manifest.json
+  index.js
+  sources/
+    spoiti-lists/
+      index.js
+      manifest.json
+      tests/
+  tests/
+    spoiti-lists.test.cjs
+  extensions/
+    spoiti-lists.sflx
+  scripts/
+    build_packages.py
+```
 
-No Client Secret is needed for this extension. The app uses PKCE and your runtime Client ID only.
+This keeps the extension store-compatible metadata separate from the provider source, and makes it easier to rebuild packages when Mornye updates the extension format.
 
-## Build the extension package
+## Spotify integration
 
-From the repo root:
+This extension uses the Spotify Web API only for official metadata access:
+
+- playlist listing
+- saved tracks
+- artist and album metadata
+- search results
+- home feed assembly
+
+It does not depend on stream extraction or protected audio capture.
+
+## Runtime Client ID
+
+The Spotify Client ID is entered at runtime in the app settings. No secret or hardcoded key is stored in the extension build.
+
+## Build
 
 - macOS / Linux:
-  chmod +x scripts/package.sh && ./scripts/package.sh
+  `chmod +x scripts/package.sh && ./scripts/package.sh`
 
 - Windows PowerShell:
-  powershell -ExecutionPolicy Bypass -File scripts/package.ps1
+  `powershell -ExecutionPolicy Bypass -File scripts/package.ps1`
 
-This creates the packaged extension file and copies it into the extensions folder.
+## License
 
-## Repo notes
-
-- manifest.json contains the extension metadata and settings
-- index.js contains the Spotify API integration and handlers
-- registry.json is used by Mornye Store installs
-
-## Credits
-
-- Mornye
-- Spotify Web API
-- PKCE OAuth flow
-
-License: MIT
+MIT

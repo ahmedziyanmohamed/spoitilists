@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-04-14T20:10:00Z",
+  "updated_at": "2026-10-26T00:00:00Z",
   "extensions": [
     {
       "id": "spoiti-lists",
@@ -8,20 +8,19 @@
       "display_name": "SpotiLists",
       "version": "1.4.2",
       "author": "AlexRabbit",
-      "description": "Addon for Mornye: your Spotify playlists and saved tracks in the app. Sign in once; open a playlist to see the latest songs from Spotify.",
-      "download_url": "https://raw.githubusercontent.com/AlexRabbit/SpoitiLists/main/extensions/spoiti-lists.spotiflac-ext",
+      "description": "Spotify library, playlist, and saved-track metadata provider for Mornye with runtime Client ID support.",
+      "download_url": "https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/extensions/spoiti-lists.spotiflac-ext",
       "category": "integration",
       "tags": [
         "spotify",
         "mornye",
-        "playlist",
-        "oauth",
-        "homefeed",
         "metadata",
-        "spoiti-lists"
+        "playlist",
+        "homefeed",
+        "library"
       ],
       "downloads": 0,
-      "updated_at": "2026-04-14T20:10:00Z",
+      "updated_at": "2026-10-26T00:00:00Z",
       "min_app_version": "4.1.0"
     }
   ]
