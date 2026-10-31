@@ -1,1 +1,45 @@
-.
+name: Build Mornye extension package
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "sources/**"
+      - "tests/**"
+      - "scripts/**"
+      - "registry.json"
+      - ".github/workflows/build-extension-package.yml"
+  pull_request:
+    paths:
+      - "sources/**"
+      - "tests/**"
+      - "scripts/**"
+      - "registry.json"
+      - ".github/workflows/build-extension-package.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build package
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/build_packages.py
+
+      - name: Upload generated extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: spoiti-lists-extension
+          path: |
+            extensions/*.sflx
+            registry.json
