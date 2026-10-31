@@ -1,47 +1,66 @@
-# Fails if manifest.json / registry.json were bumped without rebuilding the .spotiflac-ext zips.
-name: Verify extension package matches manifest
+name: Verify Mornye extension source and package
+
 on:
   push:
     branches: [main, master]
     paths:
-      - "manifest.json"
-      - "index.js"
-      - "extensions/**"
+      - "sources/**"
+      - "tests/**"
+      - "scripts/build_packages.py"
       - "registry.json"
       - ".github/workflows/verify-extension-package.yml"
   pull_request:
     paths:
-      - "manifest.json"
-      - "index.js"
-      - "extensions/**"
+      - "sources/**"
+      - "tests/**"
+      - "scripts/build_packages.py"
       - "registry.json"
       - ".github/workflows/verify-extension-package.yml"
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check packaged manifest matches repo manifest
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate source manifest and tests
         run: |
           set -euo pipefail
-          M="$(jq -r .version manifest.json)"
-          for f in extensions/spoiti-lists.spotiflac-ext extensions/SpotiLists.spotiflac-ext; do
-            if [[ ! -f "$f" ]]; then
-              echo "::error::Missing $f — run scripts/package.sh (or package.ps1) and commit the extensions/ folder."
-              exit 1
-            fi
-            Z="$(unzip -p "$f" manifest.json | jq -r .version)"
-            if [[ "$M" != "$Z" ]]; then
-              echo "::error::Version mismatch: root manifest.json is $M but $f contains manifest version $Z."
-              echo "Run: ./scripts/package.sh   then git add extensions/ && git commit"
-              exit 1
-            fi
-          done
-          R="$(jq -r '.extensions[0].version' registry.json)"
-          if [[ "$M" != "$R" ]]; then
-            echo "::error::registry.json lists version $R but manifest.json is $M — update both together."
+          node --test tests/*.test.cjs
+
+      - name: Check source manifest matches registry entry
+        run: |
+          set -euo pipefail
+          SRC_V="$(jq -r '.version' sources/spoiti-lists/manifest.json)"
+          REG_V="$(jq -r '.extensions[] | select(.id == "spoiti-lists") | .version' registry.json)"
+          if [[ -z "$REG_V" ]]; then
+            echo "::error::registry.json does not contain a spoiti-lists entry."
             exit 1
           fi
-          echo "OK: manifest, registry, and both .spotiflac-ext packages agree on $M"
+          if [[ "$SRC_V" != "$REG_V" ]]; then
+            echo "::error::Version mismatch: sources/spoiti-lists/manifest.json is $SRC_V but registry.json says $REG_V."
+            exit 1
+          fi
+          echo "OK: source manifest and registry entry agree on version $SRC_V"
+
+      - name: Build extension archives and ensure repo remains in sync
+        run: |
+          set -euo pipefail
+          python3 scripts/build_packages.py
+          if ! git diff --quiet -- registry.json extensions; then
+            echo "::error::The extension build changed generated files. Commit the updated registry and extensions output."
+            git --no-pager diff -- registry.json extensions
+            exit 1
+          fi
+          echo "OK: generated extension files and registry are in sync"
