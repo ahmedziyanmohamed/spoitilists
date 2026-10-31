@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "updated_at": "2026-10-26T00:00:00Z",
+  "updated_at": "2026-10-31T00:00:00Z",
   "extensions": [
     {
       "id": "spoiti-lists",
       "name": "spoiti-lists",
       "display_name": "SpotiLists",
-      "version": "1.4.2",
-      "author": "AlexRabbit",
+      "version": "0.0.1",
+      "author": "Ziyan",
       "description": "Spotify library, playlist, and saved-track metadata provider for Mornye with runtime Client ID support.",
       "download_url": "https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/extensions/spoiti-lists.spotiflac-ext",
       "category": "integration",
@@ -20,7 +20,7 @@
         "library"
       ],
       "downloads": 0,
-      "updated_at": "2026-10-26T00:00:00Z",
+      "updated_at": "2026-10-31T00:00:00Z",
       "min_app_version": "4.1.0"
     }
   ]
