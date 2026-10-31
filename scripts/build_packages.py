@@ -32,14 +32,15 @@ def load_json(path: Path):
 def package_source(source_dir: Path) -> Path:
     manifest_path = source_dir / "manifest.json"
     index_path = source_dir / "index.js"
+
     if not manifest_path.exists():
         raise FileNotFoundError(f"Missing manifest.json in {source_dir}")
     if not index_path.exists():
         raise FileNotFoundError(f"Missing index.js in {source_dir}")
 
+    EXTENSIONS_DIR.mkdir(parents=True, exist_ok=True)
     archive_name = f"{source_dir.name}.sflx"
     archive_path = EXTENSIONS_DIR / archive_name
-    EXTENSIONS_DIR.mkdir(exist_ok=True)
 
     with ZipFile(archive_path, "w") as zf:
         zf.write(manifest_path, arcname="manifest.json")
@@ -58,7 +59,7 @@ def ensure_registry_entry(entry_id: str, archive_path: Path):
         "name": entry_id,
         "display_name": manifest.get("displayName", manifest.get("name", entry_id)),
         "version": manifest.get("version", "0.0.0"),
-        "author": manifest.get("author", ""),
+        "author": manifest.get("author", "Ziyan"),
         "description": manifest.get("description", ""),
         "download_url": f"https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/extensions/{archive_path.name}",
         "sha256": sha256_file(archive_path),
@@ -66,7 +67,7 @@ def ensure_registry_entry(entry_id: str, archive_path: Path):
         "tags": ["spotify", "mornye", "metadata", "playlist", "homefeed", "library"],
         "downloads": 0,
         "updated_at": updated,
-        "min_app_version": manifest.get("minAppVersion", "4.1.0")
+        "min_app_version": manifest.get("minAppVersion", "4.1.0"),
     }
 
     entries = registry.get("extensions", [])
@@ -79,6 +80,7 @@ def ensure_registry_entry(entry_id: str, archive_path: Path):
 
     registry["extensions"] = entries
     registry["updated_at"] = updated
+
     with REGISTRY_PATH.open("w", encoding="utf-8") as f:
         json.dump(registry, f, indent=2)
         f.write("\n")
