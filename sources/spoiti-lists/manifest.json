@@ -3,7 +3,7 @@
   "displayName": "SpotiLists",
   "version": "0.0.1",
   "description": "Your Spotify playlists and liked songs inside Mornye. Uses Spotify’s official API; lists refresh when you open them (home feed may cache a few minutes).",
-  "author": "AlexRabbit",
+  "author": "Ziyan",
   "homepage": "https://github.com/AlexRabbit/SpoitiLists",
   "minAppVersion": "4.1.0",
 
