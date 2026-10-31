@@ -17,6 +17,9 @@ on:
       - "registry.json"
       - ".github/workflows/build-extension-package.yml"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,6 +27,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -40,24 +45,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p extension
           cp -f registry.json extension/registry.json
           find extensions -maxdepth 1 -type f -name "*.sflx" -exec cp -f {} extension/ \;
-
-      - name: Show generated files
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Generated files:"
-          find extension -maxdepth 2 -type f | sort
 
       - name: Commit generated extension folder
         shell: bash
         run: |
           set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           git add extension
-          git diff --cached --quiet || git commit -m "Build generated extension package"
-          git push
+          if ! git diff --cached --quiet; then
+            git commit -m "Build generated extension package"
+            git push
+          else
+            echo "No generated changes to commit."
+          fi
