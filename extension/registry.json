@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-31T04:30:15Z",
+  "extensions": [
+    {
+      "id": "spoiti-lists",
+      "name": "spoiti-lists",
+      "display_name": "SpotiLists",
+      "version": "0.0.1",
+      "author": "Ziyan",
+      "description": "Your Spotify playlists and liked songs inside Mornye. Uses Spotify\u2019s official API; lists refresh when you open them (home feed may cache a few minutes).",
+      "download_url": "https://raw.githubusercontent.com/ahmedziyanmohamed/spoitilists/main/extensions/spoiti-lists.sflx",
+      "sha256": "8496132371e9d4627d1879840668fb446c1a7427bf424f52eaedd35a291dab5d",
+      "category": "integration",
+      "tags": [
+        "spotify",
+        "mornye",
+        "metadata",
+        "playlist",
+        "homefeed",
+        "library"
+      ],
+      "downloads": 0,
+      "updated_at": "2026-10-31T04:30:15Z",
+      "min_app_version": "4.1.0"
+    }
+  ]
+}
