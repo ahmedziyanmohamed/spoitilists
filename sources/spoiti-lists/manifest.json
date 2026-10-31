@@ -1,0 +1,102 @@
+{
+  "name": "spoiti-lists",
+  "displayName": "SpotiLists",
+  "version": "1.4.2",
+  "description": "Your Spotify playlists and liked songs inside Mornye. Uses Spotify’s official API; lists refresh when you open them (home feed may cache a few minutes).",
+  "author": "AlexRabbit",
+  "homepage": "https://github.com/AlexRabbit/SpoitiLists",
+  "minAppVersion": "4.1.0",
+
+  "permissions": {
+    "network": [
+      "accounts.spotify.com",
+      "api.spotify.com",
+      "*.scdn.co",
+      "*.spotifycdn.com"
+    ],
+    "storage": true
+  },
+
+  "type": ["metadata_provider"],
+
+  "capabilities": {
+    "homeFeed": true
+  },
+
+  "searchBehavior": {
+    "enabled": true,
+    "placeholder": "Search Spotify (tracks, albums, playlists, artists)…",
+    "primary": false,
+    "icon": "spotify"
+  },
+
+  "urlHandler": {
+    "enabled": true,
+    "patterns": [
+      "open.spotify.com/track/",
+      "open.spotify.com/album/",
+      "open.spotify.com/playlist/",
+      "open.spotify.com/artist/"
+    ]
+  },
+
+  "settings": [
+    {
+      "key": "client_id",
+      "label": "Spotify Client ID",
+      "type": "string",
+      "description": "From Spotify Developer Dashboard. This is entered at runtime in Mornye, not baked into the extension build.",
+      "required": false,
+      "default": ""
+    },
+    {
+      "key": "redirect_uri",
+      "label": "Redirect URI",
+      "type": "string",
+      "description": "Must match Spotify app settings exactly (default is usually fine).",
+      "default": "mornye://callback"
+    },
+    {
+      "key": "oauth_login_url",
+      "label": "OAuth login URL",
+      "type": "string",
+      "description": "Auto-filled by Connect. If callback fails, copy this URL into browser and use fallback code field.",
+      "required": false
+    },
+    {
+      "key": "connect",
+      "label": "Connect to Spotify",
+      "type": "button",
+      "description": "One tap: opens Spotify login in your browser and returns to Mornye.",
+      "action": "connectSpotify"
+    },
+    {
+      "key": "show_link",
+      "label": "Show last login URL again",
+      "type": "button",
+      "description": "Restores the last OAuth URL in the field above for troubleshooting.",
+      "action": "showLastSpotifyAuthLink"
+    },
+    {
+      "key": "pasted_auth_code",
+      "label": "Authorization code (fallback)",
+      "type": "string",
+      "description": "Usually not needed. Use only if callback is blocked; paste code= value (or full callback URL), save, then tap Finish login.",
+      "required": false
+    },
+    {
+      "key": "finish",
+      "label": "Finish login (if needed)",
+      "type": "button",
+      "description": "Fallback only. Usually not needed if callback opens Mornye.",
+      "action": "completeSpotifyLogin"
+    },
+    {
+      "key": "logout",
+      "label": "Disconnect",
+      "type": "button",
+      "description": "Clear Spotify login for this extension.",
+      "action": "disconnectSpotify"
+    }
+  ]
+}

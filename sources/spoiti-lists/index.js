@@ -1,0 +1,766 @@
+/**
+ * SpoitiLists — Spotify metadata provider for Mornye.
+ */
+
+var EXT_ID = "spoiti-lists";
+var settings = {};
+
+var SCOPES = [
+  "playlist-read-private",
+  "playlist-read-collaborative",
+  "user-library-read",
+  "user-read-email"
+].join(" ");
+
+var AUTH_URL = "https://accounts.spotify.com/authorize";
+var TOKEN_URL = "https://accounts.spotify.com/api/token";
+var API_BASE = "https://api.spotify.com/v1";
+
+function initialize(config) {
+  settings = config || {};
+  tryExchangePendingCode();
+  return true;
+}
+
+function cleanup() {}
+
+function getClientId() {
+  return (settings.client_id && String(settings.client_id).trim()) || "";
+}
+
+function getRedirectUri() {
+  var u = settings.redirect_uri;
+  if (u && String(u).trim()) return String(u).trim();
+  return "mornye://callback";
+}
+
+function extractAuthCode(input) {
+  try {
+    var s = String(input).trim();
+    if (!s) return "";
+    var qIdx = s.indexOf("?");
+    if (qIdx >= 0) {
+      var query = s.slice(qIdx + 1);
+      var parts = query.split("&");
+      for (var i = 0; i < parts.length; i++) {
+        var seg = parts[i].split("=");
+        if (seg.length && decodeURIComponent(seg[0]) === "code") {
+          return decodeURIComponent(seg.slice(1).join("="));
+        }
+      }
+    }
+    var m = s.match(/(?:^|[?&#])code=([^&\s#]+)/);
+    if (m) return decodeURIComponent(m[1]);
+    return s;
+  } catch (e) {
+    return "";
+  }
+}
+
+function getPastedAuthCode() {
+  var raw =
+    (settings.pasted_auth_code && String(settings.pasted_auth_code).trim()) ||
+    "";
+  if (!raw) return "";
+  return extractAuthCode(raw);
+}
+
+function tryExchangePendingCode() {
+  var clientId = getClientId();
+  if (!clientId) return;
+  var code = auth.getAuthCode();
+  if (!code) return;
+  var tokens = auth.getTokens();
+  if (tokens && tokens.access_token && !tokens.is_expired) {
+    auth.setAuthCode("");
+    return;
+  }
+  var ex = auth.exchangeCodeWithPKCE({
+    tokenUrl: TOKEN_URL,
+    clientId: clientId,
+    redirectUri: getRedirectUri(),
+    code: code
+  });
+  if (ex && ex.success) {
+    auth.setAuthCode("");
+  }
+}
+
+function ensureAccessToken() {
+  var clientId = getClientId();
+  if (!clientId) return false;
+
+  tryExchangePendingCode();
+
+  var t = auth.getTokens();
+  if (t && t.access_token && !t.is_expired) return true;
+
+  var rt = t && t.refresh_token ? t.refresh_token : "";
+  if (!rt) return false;
+
+  var body =
+    "grant_type=refresh_token" +
+    "&refresh_token=" +
+    encodeURIComponent(rt) +
+    "&client_id=" +
+    encodeURIComponent(clientId);
+
+  var resp = http.post(TOKEN_URL, body, {
+    "Content-Type": "application/x-www-form-urlencoded"
+  });
+  if (!resp || !resp.ok) {
+    auth.clearAuth();
+    return false;
+  }
+  var data = JSON.parse(resp.body);
+  if (!data.access_token) {
+    auth.clearAuth();
+    return false;
+  }
+  auth.setAuthCode({
+    access_token: data.access_token,
+    refresh_token: data.refresh_token || rt,
+    expires_in: data.expires_in || 3600
+  });
+  return true;
+}
+
+function spotifyRequest(path, method, payload, customHeaders) {
+  if (!ensureAccessToken()) return { ok: false, status: 401, body: "{}" };
+  var t = auth.getTokens();
+  var url = path.indexOf("http") === 0 ? path : API_BASE + path;
+  var headers = {
+    Authorization: "Bearer " + t.access_token
+  };
+  if (customHeaders) {
+    for (var key in customHeaders) {
+      if (customHeaders.hasOwnProperty(key)) {
+        headers[key] = customHeaders[key];
+      }
+    }
+  }
+
+  var requestBody = payload;
+  if (requestBody !== undefined && requestBody !== null && typeof requestBody !== "string") {
+    requestBody = JSON.stringify(requestBody);
+  }
+
+  var r = null;
+  var methodName = String(method || "GET").toUpperCase();
+  if (methodName === "GET") {
+    r = http.get(url, headers);
+  } else if (methodName === "POST") {
+    r = http.post(url, requestBody || "", headers);
+  } else if (methodName === "PUT") {
+    r = http.put(url, requestBody || "", headers);
+  } else if (methodName === "DELETE") {
+    r = http.delete(url, requestBody || "", headers);
+  } else {
+    r = http.get(url, headers);
+  }
+
+  if (r && r.status === 401) {
+    if (ensureAccessToken()) {
+      t = auth.getTokens();
+      headers.Authorization = "Bearer " + t.access_token;
+      if (methodName === "GET") {
+        r = http.get(url, headers);
+      } else if (methodName === "POST") {
+        r = http.post(url, requestBody || "", headers);
+      } else if (methodName === "PUT") {
+        r = http.put(url, requestBody || "", headers);
+      } else if (methodName === "DELETE") {
+        r = http.delete(url, requestBody || "", headers);
+      }
+    }
+  }
+
+  return r || { ok: false, status: 0, body: "{}" };
+}
+
+function spotifyGet(path) {
+  return spotifyRequest(path, "GET", null, null);
+}
+
+function canReadSpotifyLibrary() {
+  var r = spotifyGet("/me/playlists?limit=1");
+  if (!r.ok) {
+    var msg = "Spotify API check failed (HTTP " + (r.status || 0) + ")";
+    try {
+      var data = JSON.parse(r.body || "{}");
+      if (data && data.error && data.error.message) {
+        msg += ": " + data.error.message;
+      }
+    } catch (e) {}
+    return { ok: false, error: msg };
+  }
+  return { ok: true };
+}
+
+function pickImage(images) {
+  if (!images || !images.length) return "";
+  return images[0].url || "";
+}
+
+function extractTrackId(t) {
+  if (!t) return "";
+  if (t.id) return String(t.id);
+  if (t.linked_from && t.linked_from.id) return String(t.linked_from.id);
+  var uri = t.uri ? String(t.uri) : "";
+  var m = uri.match(/spotify:track:([a-zA-Z0-9]+)/);
+  if (m) return m[1];
+  return "";
+}
+
+function mapTrack(t) {
+  if (!t) return null;
+  var tid = extractTrackId(t);
+  if (!tid) return null;
+  var artists = (t.artists || [])
+    .map(function (a) {
+      return a.name;
+    })
+    .join(", ");
+  var album = t.album || {};
+  return {
+    id: tid,
+    name: t.name || "Unknown track",
+    artists: artists,
+    album_name: album.name || "",
+    album_artist: artists,
+    duration_ms: t.duration_ms || 0,
+    cover_url: pickImage(album.images),
+    track_number: t.track_number || 0,
+    disc_number: t.disc_number || 0,
+    release_date: album.release_date || "",
+    isrc: (t.external_ids && t.external_ids.isrc) || "",
+    spotify_id: tid,
+    provider_id: EXT_ID
+  };
+}
+
+function searchTracks(query, limit) {
+  if (!ensureAccessToken()) return [];
+  var lim = limit || 20;
+  var path =
+    "/search?q=" +
+    encodeURIComponent(query) +
+    "&type=track&limit=" +
+    encodeURIComponent(String(Math.min(lim, 50)));
+  var r = spotifyGet(path);
+  if (!r.ok) return [];
+  var data = JSON.parse(r.body);
+  var items = (data.tracks && data.tracks.items) || [];
+  var out = [];
+  for (var i = 0; i < items.length; i++) {
+    var m = mapTrack(items[i]);
+    if (m) out.push(m);
+  }
+  return out;
+}
+
+function customSearch(query) {
+  if (!ensureAccessToken()) return [];
+  var path =
+    "/search?q=" +
+    encodeURIComponent(query) +
+    "&type=track,album,playlist,artist&limit=20";
+  var r = spotifyGet(path);
+  if (!r.ok) return [];
+  var data = JSON.parse(r.body);
+  var out = [];
+
+  var tracks = (data.tracks && data.tracks.items) || [];
+  for (var ti = 0; ti < tracks.length; ti++) {
+    var tr = mapTrack(tracks[ti]);
+    if (tr) out.push(tr);
+  }
+
+  var albums = (data.albums && data.albums.items) || [];
+  for (var ai = 0; ai < albums.length; ai++) {
+    var al = albums[ai];
+    var alArt = (al.artists || [])
+      .map(function (a) {
+        return a.name;
+      })
+      .join(", ");
+    out.push({
+      id: al.id,
+      name: al.name,
+      artists: alArt,
+      album_name: al.name,
+      album_type: al.album_type || "album",
+      release_date: al.release_date || "",
+      cover_url: pickImage(al.images),
+      item_type: "album",
+      provider_id: EXT_ID
+    });
+  }
+
+  var playlists = (data.playlists && data.playlists.items) || [];
+  for (var pi = 0; pi < playlists.length; pi++) {
+    var pl = playlists[pi];
+    var owner = (pl.owner && pl.owner.display_name) || "Playlist";
+    out.push({
+      id: pl.id,
+      name: pl.name,
+      artists: owner,
+      album_name: pl.name,
+      album_type: "playlist",
+      description: pl.description || "",
+      cover_url: pickImage(pl.images),
+      item_type: "playlist",
+      provider_id: EXT_ID
+    });
+  }
+
+  var artists = (data.artists && data.artists.items) || [];
+  for (var ri = 0; ri < artists.length; ri++) {
+    var ar = artists[ri];
+    out.push({
+      id: ar.id,
+      name: ar.name,
+      artists: ar.name,
+      cover_url: pickImage(ar.images),
+      item_type: "artist",
+      provider_id: EXT_ID
+    });
+  }
+
+  return out;
+}
+
+function fetchAllPaginated(initialPath) {
+  var all = [];
+  var next = initialPath;
+  while (next) {
+    var r = spotifyGet(next);
+    if (!r.ok) break;
+    var data = JSON.parse(r.body);
+    var items = data.items || [];
+    for (var i = 0; i < items.length; i++) all.push(items[i]);
+    next = data.next || null;
+  }
+  return all;
+}
+
+function getAlbum(albumId) {
+  var r = spotifyGet("/albums/" + encodeURIComponent(albumId));
+  if (!r.ok) throw new Error("album fetch failed");
+  var al = JSON.parse(r.body);
+  var alArt = (al.artists || [])
+    .map(function (a) {
+      return a.name;
+    })
+    .join(", ");
+  var tracks = fetchAllPaginated(
+    "/albums/" + encodeURIComponent(albumId) + "/tracks?limit=50"
+  );
+  var mapped = [];
+  for (var i = 0; i < tracks.length; i++) {
+    var tr = tracks[i];
+    var full = mapTrack(tr);
+    if (!full) continue;
+    if (!full.cover_url) full.cover_url = pickImage(al.images);
+    mapped.push(full);
+  }
+  return {
+    id: albumId,
+    name: al.name,
+    artists: alArt,
+    cover_url: pickImage(al.images),
+    release_date: al.release_date || "",
+    total_tracks: al.total_tracks || mapped.length,
+    album_type: al.album_type || "album",
+    tracks: mapped,
+    provider_id: EXT_ID
+  };
+}
+
+function getPlaylist(playlistId) {
+  var pid = String(playlistId || "").trim();
+  var uriMatch = pid.match(/spotify:playlist:([a-zA-Z0-9]+)/);
+  if (uriMatch) pid = uriMatch[1];
+  var urlMatch = pid.match(/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/);
+  if (urlMatch) pid = urlMatch[1];
+  var r = spotifyGet(
+    "/playlists/" +
+      encodeURIComponent(pid) +
+      "?additional_types=track&market=from_token&limit=100"
+  );
+  var pl = r.ok ? JSON.parse(r.body) : {};
+  var owner = (pl.owner && pl.owner.display_name) || "";
+  var rawItems = [];
+  if (pl.tracks && pl.tracks.items && pl.tracks.items.length) {
+    for (var i0 = 0; i0 < pl.tracks.items.length; i0++) {
+      rawItems.push(pl.tracks.items[i0]);
+    }
+    var nextUrl = pl.tracks.next || null;
+    while (nextUrl) {
+      var nr = spotifyGet(nextUrl);
+      if (!nr.ok) break;
+      var nd = JSON.parse(nr.body);
+      var nItems = nd.items || [];
+      for (var ni = 0; ni < nItems.length; ni++) rawItems.push(nItems[ni]);
+      nextUrl = nd.next || null;
+    }
+  }
+  if (!rawItems.length) {
+    rawItems = fetchAllPaginated(
+      "/playlists/" +
+        encodeURIComponent(pid) +
+        "/tracks?additional_types=track&market=from_token&limit=100"
+    );
+  }
+  var mapped = [];
+  for (var i = 0; i < rawItems.length; i++) {
+    var row = rawItems[i];
+    var tr = row.track;
+    if (!tr && row && row.uri) {
+      tr = { uri: row.uri, name: row.name || "", artists: row.artists || [] };
+    }
+    var m = mapTrack(tr);
+    if (m) mapped.push(m);
+  }
+  return {
+    id: pid || playlistId,
+    name: pl.name || "Playlist",
+    owner: owner,
+    cover_url: pickImage(pl.images),
+    total_tracks: mapped.length,
+    tracks: mapped,
+    provider_id: EXT_ID
+  };
+}
+
+function getArtist(artistId) {
+  var r = spotifyGet("/artists/" + encodeURIComponent(artistId));
+  if (!r.ok) throw new Error("artist fetch failed");
+  var ar = JSON.parse(r.body);
+  var r2 = spotifyGet(
+    "/artists/" + encodeURIComponent(artistId) + "/albums?include_groups=album,single&limit=50"
+  );
+  var albums = [];
+  if (r2.ok) {
+    var ad = JSON.parse(r2.body);
+    var items = ad.items || [];
+    for (var i = 0; i < items.length; i++) {
+      var al = items[i];
+      var alArt = (al.artists || [])
+        .map(function (a) {
+          return a.name;
+        })
+        .join(", ");
+      albums.push({
+        id: al.id,
+        name: al.name,
+        artists: alArt,
+        cover_url: pickImage(al.images),
+        release_date: al.release_date || "",
+        total_tracks: al.total_tracks || 0,
+        album_type: al.album_type || "album",
+        provider_id: EXT_ID
+      });
+    }
+  }
+  return {
+    id: artistId,
+    name: ar.name,
+    image_url: pickImage(ar.images),
+    albums: albums,
+    provider_id: EXT_ID
+  };
+}
+
+function getTimeGreeting() {
+  try {
+    var lt = gobackend.getLocalTime();
+    var h = typeof lt.hour === "number" ? lt.hour : 12;
+    if (h >= 5 && h < 12) return "Good morning";
+    if (h >= 12 && h < 17) return "Good afternoon";
+    if (h >= 17 && h < 21) return "Good evening";
+    return "Good night";
+  } catch (e) {
+    return "Hello";
+  }
+}
+
+function getHomeFeed() {
+  if (!getClientId()) {
+    return {
+      success: false,
+      error: "Set your Spotify Client ID in extension settings."
+    };
+  }
+  if (!ensureAccessToken()) {
+    return {
+      success: false,
+      error: "Not signed in. Use Connect, then Finish login."
+    };
+  }
+  var health = canReadSpotifyLibrary();
+  if (!health.ok) {
+    return {
+      success: false,
+      error:
+        "Spotify login is not usable yet. Tap Connect again and approve permissions. " +
+        health.error
+    };
+  }
+
+  var sections = [];
+
+  var playlists = fetchAllPaginated("/me/playlists?limit=50");
+  var plItems = [];
+  for (var i = 0; i < playlists.length; i++) {
+    var p = playlists[i];
+    plItems.push({
+      id: p.id,
+      uri: p.uri,
+      type: "playlist",
+      name: p.name,
+      description: (p.description || "").replace(/<[^>]+>/g, ""),
+      cover_url: pickImage(p.images),
+      artists: (p.owner && p.owner.display_name) || "",
+      provider_id: EXT_ID
+    });
+  }
+  sections.push({
+    uri: "me:playlists",
+    title: "Your playlists",
+    items: plItems
+  });
+
+  var saved = fetchAllPaginated("/me/tracks?limit=50");
+  var trItems = [];
+  for (var j = 0; j < Math.min(saved.length, 50); j++) {
+    var st = saved[j].track;
+    var mt = mapTrack(st);
+    if (!mt) continue;
+    trItems.push({
+      id: mt.id,
+      uri: st.uri,
+      type: "track",
+      name: mt.name,
+      artists: mt.artists,
+      cover_url: mt.cover_url,
+      album_id: st.album && st.album.id,
+      album_name: st.album && st.album.name,
+      provider_id: EXT_ID
+    });
+  }
+  sections.push({
+    uri: "me:tracks",
+    title: "Saved tracks",
+    items: trItems
+  });
+
+  return {
+    success: true,
+    greeting: getTimeGreeting(),
+    sections: sections
+  };
+}
+
+function parseSpotifyOpenUrl(url) {
+  try {
+    var path = String(url).split("?")[0];
+    var m = path.match(
+      /open\.spotify\.com\/(track|album|playlist|artist)\/([a-zA-Z0-9]+)/
+    );
+    if (!m) return null;
+    return { type: m[1], id: m[2] };
+  } catch (e) {
+    return null;
+  }
+}
+
+function handleUrl(url) {
+  if (!ensureAccessToken()) {
+    return { type: "error", name: "Sign in required", cover_url: "" };
+  }
+  var p = parseSpotifyOpenUrl(url);
+  if (!p) return { type: "error", name: "Unsupported Spotify URL", cover_url: "" };
+
+  if (p.type === "track") {
+    var r = spotifyGet("/tracks/" + encodeURIComponent(p.id));
+    if (!r.ok) return { type: "error", name: "Track not found", cover_url: "" };
+    var t = mapTrack(JSON.parse(r.body));
+    return { type: "track", track: t };
+  }
+  if (p.type === "album") {
+    var al = getAlbum(p.id);
+    return {
+      type: "album",
+      name: al.name,
+      cover_url: al.cover_url,
+      tracks: al.tracks,
+      album: { id: al.id, name: al.name }
+    };
+  }
+  if (p.type === "playlist") {
+    var pl = getPlaylist(p.id);
+    return {
+      type: "playlist",
+      name: pl.name,
+      cover_url: pl.cover_url,
+      tracks: pl.tracks
+    };
+  }
+  if (p.type === "artist") {
+    return { type: "artist", artist: getArtist(p.id) };
+  }
+  return { type: "error", name: "Unsupported", cover_url: "" };
+}
+
+function connectSpotify() {
+  var clientId = getClientId();
+  if (!clientId) {
+    return { success: false, error: "Set Spotify Client ID first." };
+  }
+  tryExchangePendingCode();
+  var t = auth.getTokens();
+  if (t && t.access_token && !t.is_expired) {
+    var health = canReadSpotifyLibrary();
+    if (!health.ok) {
+      auth.clearAuth();
+    } else {
+      return {
+        success: true,
+        message: "Spotify is already connected."
+      };
+    }
+  }
+  t = auth.getTokens();
+  if (t && t.access_token && !t.is_expired) {
+    return {
+      success: true,
+      message: "Spotify is already connected."
+    };
+  }
+  var redir = getRedirectUri();
+  var pk = auth.startOAuthWithPKCE({
+    authUrl: AUTH_URL,
+    clientId: clientId,
+    redirectUri: redir,
+    scope: SCOPES,
+    extraParams: { state: EXT_ID }
+  });
+  if (!pk.success) {
+    return { success: false, error: pk.error || "PKCE failed" };
+  }
+  storage.set("last_spotify_auth_url", pk.authUrl);
+  return {
+    success: true,
+    message:
+      "Opening Spotify login. Redirect URI: " +
+      redir +
+      ". Approve in browser and return to Mornye.",
+    open_auth_url: pk.authUrl,
+    setting_updates: {
+      redirect_uri: redir,
+      oauth_login_url: pk.authUrl
+    }
+  };
+}
+
+function showLastSpotifyAuthLink() {
+  var url = storage.get("last_spotify_auth_url", "");
+  url = url ? String(url) : "";
+  if (url.length < 40) {
+    return {
+      success: false,
+      error: 'No login URL saved yet. Tap "Connect to Spotify" first.'
+    };
+  }
+  return {
+    success: true,
+    message:
+      "Saved login URL restored below. If callback still fails, open this URL manually and use Authorization code fallback.",
+    setting_updates: { oauth_login_url: url }
+  };
+}
+
+function completeSpotifyLogin() {
+  var clientId = getClientId();
+  if (!clientId) {
+    return { success: false, error: "Set Spotify Client ID first." };
+  }
+  tryExchangePendingCode();
+  var tok = auth.getTokens();
+  if (tok && tok.access_token && !tok.is_expired) {
+    var autoHealth = canReadSpotifyLibrary();
+    if (autoHealth.ok) {
+      return { success: true, message: "Spotify connected." };
+    }
+  }
+  var code = auth.getAuthCode();
+  if (!code) {
+    var pasted = getPastedAuthCode();
+    if (pasted) {
+      auth.setAuthCode(pasted);
+      code = pasted;
+    }
+  }
+  if (!code) {
+    return {
+      success: false,
+      error:
+        "No callback code received yet. Current Redirect URI is \"" +
+        getRedirectUri() +
+        "\". Make sure Spotify app settings use this exact URI, then reconnect. If callback is blocked, paste code manually."
+    };
+  }
+  var ex = auth.exchangeCodeWithPKCE({
+    tokenUrl: TOKEN_URL,
+    clientId: clientId,
+    redirectUri: getRedirectUri(),
+    code: code
+  });
+  if (!ex.success) {
+    return {
+      success: false,
+      error: (ex.error_description || ex.error || "Token exchange failed").toString()
+    };
+  }
+  auth.setAuthCode("");
+  var finalHealth = canReadSpotifyLibrary();
+  if (!finalHealth.ok) {
+    auth.clearAuth();
+    return {
+      success: false,
+      error:
+        "Spotify token was created but playlist access failed. Reconnect and approve all requested scopes. " +
+        finalHealth.error
+    };
+  }
+  return {
+    success: true,
+    message:
+      "Spotify connected. Clear the \"Authorization code\" field when you are done (optional, for privacy)."
+  };
+}
+
+function disconnectSpotify() {
+  auth.clearAuth();
+  return {
+    success: true,
+    message: "Disconnected."
+  };
+}
+
+registerExtension({
+  initialize: initialize,
+  cleanup: cleanup,
+  searchTracks: searchTracks,
+  customSearch: customSearch,
+  getAlbum: getAlbum,
+  getPlaylist: getPlaylist,
+  getArtist: getArtist,
+  getHomeFeed: getHomeFeed,
+  handleUrl: handleUrl,
+  connectSpotify: connectSpotify,
+  showLastSpotifyAuthLink: showLastSpotifyAuthLink,
+  completeSpotifyLogin: completeSpotifyLogin,
+  disconnectSpotify: disconnectSpotify
+});
